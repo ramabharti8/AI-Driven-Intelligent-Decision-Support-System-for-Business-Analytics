@@ -1,0 +1,337 @@
+# api/reports.py — PDF / Excel report generation
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from database import get_db, User, Report, Prediction, AnalyticsLog
+from utils.auth import get_current_user
+from datetime import datetime
+import os, json
+
+router = APIRouter()
+
+REPORTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "reports")
+
+
+class GenerateReportRequest(BaseModel):
+    title: str = "Business Analytics Report"
+    report_type: str = "pdf"      # pdf | excel
+    include_kpis: bool = True
+    include_ml: bool = True
+
+
+@router.post("/generate")
+def generate_report(
+    req: GenerateReportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a PDF or Excel report."""
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    filename = f"report_{current_user.id}_{timestamp}.{req.report_type}"
+    file_path = os.path.join(REPORTS_DIR, filename)
+
+    # Get latest ML results for current user
+    predictions = (
+        db.query(Prediction)
+        .filter(Prediction.owner_id == current_user.id)
+        .order_by(Prediction.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    if req.report_type == "pdf":
+        _generate_pdf(file_path, req.title, current_user, predictions)
+    else:
+        _generate_excel(file_path, req.title, current_user, predictions)
+
+    # Save record
+    report = Report(
+        title=req.title,
+        report_type=req.report_type,
+        file_path=file_path,
+        owner_id=current_user.id,
+    )
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+
+    db.add(AnalyticsLog(action="Report generated", user_id=current_user.id, details=req.title))
+    db.commit()
+
+    return {
+        "id": report.id,
+        "title": report.title,
+        "report_type": report.report_type,
+        "filename": filename,
+        "created_at": report.created_at,
+        "download_url": f"/api/reports/{report.id}/download",
+    }
+
+
+@router.get("/")
+def list_reports(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    reports = db.query(Report).filter(Report.owner_id == current_user.id).order_by(Report.created_at.desc()).all()
+    return [
+        {
+            "id": r.id,
+            "title": r.title,
+            "report_type": r.report_type,
+            "created_at": r.created_at,
+            "download_url": f"/api/reports/{r.id}/download",
+        }
+        for r in reports
+    ]
+
+
+@router.get("/{report_id}/download")
+def download_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    r = db.query(Report).filter(Report.id == report_id, Report.owner_id == current_user.id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if not os.path.exists(r.file_path):
+        raise HTTPException(status_code=404, detail="Report file missing, please regenerate")
+
+    media_type = "application/pdf" if r.report_type == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    return FileResponse(r.file_path, media_type=media_type, filename=os.path.basename(r.file_path))
+
+
+@router.delete("/{report_id}")
+def delete_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    r = db.query(Report).filter(Report.id == report_id, Report.owner_id == current_user.id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if os.path.exists(r.file_path):
+        os.remove(r.file_path)
+    db.delete(r)
+    db.commit()
+    return {"message": "Report deleted"}
+
+
+# ─── PDF Generation ───────────────────────────────────────────────────────────
+
+def _generate_pdf(path: str, title: str, user, predictions):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    import random
+
+    doc = SimpleDocTemplate(path, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm)
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle("title", parent=styles["Title"], fontSize=20, textColor=colors.HexColor("#6366f1"), spaceAfter=6)
+    h2_style    = ParagraphStyle("h2",    parent=styles["Heading2"], fontSize=13, textColor=colors.HexColor("#1e293b"), spaceBefore=12)
+    body_style  = ParagraphStyle("body",  parent=styles["Normal"],   fontSize=10, leading=14)
+
+    story = []
+    story.append(Paragraph(title, title_style))
+    story.append(Paragraph(f"Generated by: {user.name} | {datetime.utcnow().strftime('%B %d, %Y %H:%M UTC')}", body_style))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e2e8f0")))
+    story.append(Spacer(1, 0.4*cm))
+
+    # KPI Section
+    story.append(Paragraph("Key performance indicators", h2_style))
+    content = _report_content()
+    story.append(Paragraph(content["scope"], body_style))
+    kpi_data = [["Metric", "Value", "Change"]] + [list(r) for r in content["kpis"]]
+    tbl = Table(kpi_data, colWidths=[7*cm, 5*cm, 4*cm])
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#6366f1")),
+        ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
+        ("FONTSIZE",   (0, 0), (-1, -1), 10),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#f8fafc"), colors.white]),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+    ]))
+    story.append(tbl)
+    story.append(Spacer(1, 0.5*cm))
+
+    # ML Results
+    if predictions:
+        story.append(Paragraph("Your trained models", h2_style))
+        ml_data = [["Algorithm", "Accuracy", "Precision", "Recall", "F1 Score"]]
+        for p in predictions:
+            ml_data.append([
+                p.algorithm.replace("_", " ").title(),
+                f"{p.accuracy:.1f}%",
+                f"{p.precision:.1f}%",
+                f"{p.recall:.1f}%",
+                f"{p.f1_score:.1f}%",
+            ])
+        ml_tbl = Table(ml_data, colWidths=[5*cm, 3.5*cm, 3.5*cm, 3.5*cm, 3.5*cm])
+        ml_tbl.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0ea5e9")),
+            ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE",   (0, 0), (-1, -1), 9),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#f0f9ff"), colors.white]),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+            ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ]))
+        story.append(ml_tbl)
+        story.append(Spacer(1, 0.5*cm))
+
+    # Business Insights
+    story.append(Paragraph("Churn model comparison (5-fold cross-validation)", h2_style))
+    ch_tbl = Table([["Model", "ROC-AUC", "PR-AUC", "Precision", "Recall"]] + [list(r) for r in content["churn"]],
+                   colWidths=[5.5*cm, 3*cm, 3*cm, 3*cm, 3*cm])
+    ch_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f766e")),
+        ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
+        ("FONTSIZE",   (0, 0), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+    ]))
+    story.append(ch_tbl)
+    story.append(Spacer(1, 0.5*cm))
+    story.append(Paragraph("Customer segments (RFM + K-Means)", h2_style))
+    seg_tbl = Table([["Segment", "Customers", "Revenue share", "Action"]] + [list(r) for r in content["segments"]],
+                    colWidths=[4*cm, 2.5*cm, 2.8*cm, 8.2*cm])
+    seg_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#6366f1")),
+        ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
+        ("FONTSIZE",   (0, 0), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(seg_tbl)
+    story.append(Spacer(1, 0.5*cm))
+    story.append(Paragraph("Insights and recommended actions", h2_style))
+    for ins in content["insights"]:
+        story.append(Paragraph(f"• {ins}", body_style))
+        story.append(Spacer(1, 0.2*cm))
+
+    story.append(Spacer(1, 0.5*cm))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e2e8f0")))
+    story.append(Paragraph("AI Decision Support System — Confidential Report", ParagraphStyle("footer", parent=styles["Normal"], fontSize=8, textColor=colors.grey, alignment=TA_CENTER)))
+
+    doc.build(story)
+
+
+# ─── Excel Generation ─────────────────────────────────────────────────────────
+
+def _generate_excel(path: str, title: str, user, predictions):
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    import random
+
+    wb = openpyxl.Workbook()
+
+    # ── KPIs Sheet ──
+    ws_kpi = wb.active
+    ws_kpi.title = "KPI Dashboard"
+    _excel_header(ws_kpi, title, user)
+
+    content = _report_content()
+    _write_table(ws_kpi, ["Metric", "Value", "Change"], content["kpis"], start_row=4)
+
+    # ── ML Results Sheet ──
+    ws_ml = wb.create_sheet("ML Results")
+    _excel_header(ws_ml, "Machine Learning Results", user)
+    ml_headers = ["Algorithm", "Accuracy", "Precision", "Recall", "F1 Score", "Type"]
+    ml_rows = []
+    if predictions:
+        for p in predictions:
+            ml_rows.append((
+                p.algorithm.replace("_", " ").title(),
+                f"{p.accuracy:.1f}%", f"{p.precision:.1f}%",
+                f"{p.recall:.1f}%",   f"{p.f1_score:.1f}%",
+                p.task_type,
+            ))
+    _write_table(ws_ml, ml_headers, ml_rows or [("No models trained yet", "", "", "", "", "")], start_row=4)
+
+    ws_churn = wb.create_sheet("Churn Models")
+    _excel_header(ws_churn, "Churn model comparison (5-fold CV)", user)
+    _write_table(ws_churn, ["Model", "ROC-AUC", "PR-AUC", "Precision", "Recall"], content["churn"], start_row=4)
+
+    ws_seg = wb.create_sheet("Segments")
+    _excel_header(ws_seg, "Customer segments (RFM + K-Means)", user)
+    _write_table(ws_seg, ["Segment", "Customers", "Revenue share", "Action"], content["segments"], start_row=4)
+
+    ws_sales = wb.create_sheet("Monthly Sales")
+    _excel_header(ws_sales, "Monthly revenue, orders and customers", user)
+    _write_table(ws_sales, ["Month", "Revenue (GBP)", "Orders", "New customers", "Returning customers"],
+                 content["monthly"], start_row=4)
+
+    ws_ins = wb.create_sheet("Insights")
+    _excel_header(ws_ins, "Insights and recommended actions", user)
+    _write_table(ws_ins, ["Insight"], [(i,) for i in content["insights"]], start_row=4)
+    ws_ins.column_dimensions["A"].width = 140
+
+    wb.save(path)
+
+
+def _report_content() -> dict:
+    """All report numbers, computed from the data and the trained models."""
+    from ml_engine import churn, data_engine, insights, segmentation
+    k = data_engine.kpis()
+    kp = k["kpis"]
+
+    def ch(v):
+        return "" if v is None else f"{v:+.1f}%"
+
+    kpis = [
+        ("Total revenue (GBP)", f"£{kp['total_revenue']['value']:,}", ch(kp["total_revenue"]["change"])),
+        ("Orders", f"{kp['total_orders']['value']:,}", ch(kp["total_orders"]["change"])),
+        ("Active customers", f"{kp['active_customers']['value']:,}", ch(kp["active_customers"]["change"])),
+        ("Average order value", f"£{kp['avg_order_value']['value']:,.2f}", ch(kp["avg_order_value"]["change"])),
+        ("Repeat-customer rate", f"{kp['repeat_rate']['value']}%", ""),
+        ("90-day churn rate", f"{churn.public()['churn_rate']}%", ""),
+    ]
+    churn_rows = [(c["algorithm"].replace("_", " ").title(), c["roc_auc"], c["pr_auc"], c["precision"], c["recall"])
+                  for c in churn.public()["comparison"]]
+    seg_rows = [(s["segment"], s["customers"], f"{s['revenue_share']}%", s["action"])
+                for s in segmentation.public()["segments"]]
+    ms = data_engine.monthly_series()
+    monthly_rows = [(l, round(r), o, n, rt) for l, r, o, n, rt in
+                    zip(ms["labels"], ms["revenue"], ms["orders"], ms["new_customers"], ms["returning_customers"])]
+    ds = data_engine.dataset_summary()
+    return {
+        "scope": f"Data: {ds['name']}, {ds['from']} to {ds['to']}, {ds['invoices']:,} orders from "
+                 f"{ds['customers']:,} customers. Change = {k['period']['compare']}.",
+        "kpis": kpis, "churn": churn_rows, "segments": seg_rows, "monthly": monthly_rows,
+        "insights": [f"{i['title']}: {i['description']}" for i in insights.generate_insights()],
+    }
+
+
+def _excel_header(ws, title: str, user):
+    from openpyxl.styles import Font, PatternFill, Alignment
+    ws["A1"] = title
+    ws["A1"].font = Font(bold=True, size=14, color="6366F1")
+    ws["A2"] = f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC | User: {user.name}"
+    ws["A2"].font = Font(size=9, color="64748B")
+    ws.column_dimensions["A"].width = 25
+
+
+def _write_table(ws, headers, rows, start_row=4):
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    thin = Border(
+        left=Side(style="thin", color="E2E8F0"), right=Side(style="thin", color="E2E8F0"),
+        top=Side(style="thin", color="E2E8F0"),  bottom=Side(style="thin", color="E2E8F0"),
+    )
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=start_row, column=col, value=h)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="6366F1")
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = thin
+        ws.column_dimensions[cell.column_letter].width = max(15, len(str(h)) + 4)
+
+    for r_idx, row in enumerate(rows, start_row + 1):
+        bg = "F8FAFC" if r_idx % 2 == 0 else "FFFFFF"
+        for col, val in enumerate(row, 1):
+            cell = ws.cell(row=r_idx, column=col, value=val)
+            cell.fill = PatternFill("solid", fgColor=bg)
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = thin
