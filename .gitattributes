@@ -1,0 +1,4 @@
+# Normalise line endings so Windows and macOS/Linux contributors get the same files
+* text=auto
+*.png binary
+*.jpg binary
