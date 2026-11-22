@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { mlAPI, datasetsAPI } from '../services/api'
 import toast from 'react-hot-toast'
+import { ANIM } from '../motion'
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { Cpu, Play, BarChart2, Award, RefreshCw } from 'lucide-react'
 
@@ -227,7 +228,7 @@ export default function MLModelsPage() {
                 <RadarChart data={radarData}>
                   <PolarGrid stroke="var(--border-light)"/>
                   <PolarAngleAxis dataKey="metric" tick={{ fill:'var(--text-muted)', fontSize:12 }}/>
-                  <Radar dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.3} strokeWidth={2}/>
+                  <Radar isAnimationActive={ANIM} dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.3} strokeWidth={2}/>
                 </RadarChart>
               </ResponsiveContainer>
             </div>
@@ -242,7 +243,7 @@ export default function MLModelsPage() {
                     <XAxis type="number" tick={{ fill:'var(--text-muted)', fontSize:11 }} axisLine={false}/>
                     <YAxis type="category" dataKey="name" tick={{ fill:'var(--text-muted)', fontSize:11 }} width={100} axisLine={false}/>
                     <Tooltip contentStyle={{ background:'var(--bg-secondary)', border:'1px solid var(--border)', borderRadius:10, fontSize:13 }}/>
-                    <Bar dataKey="value" radius={[0,4,4,0]}>
+                    <Bar isAnimationActive={ANIM} dataKey="value" radius={[0,4,4,0]}>
                       {featImpData.map((_, i) => <Cell key={i} fill={`hsl(${245 + i*15}, 70%, 65%)`}/>)}
                     </Bar>
                   </BarChart>
@@ -300,7 +301,7 @@ export default function MLModelsPage() {
               <YAxis domain={[0,100]} tick={{ fill:'var(--text-muted)', fontSize:11 }} axisLine={false}/>
               <Tooltip contentStyle={{ background:'var(--bg-secondary)', border:'1px solid var(--border)', borderRadius:10, fontSize:13 }} formatter={v => [`${v}%`,'']}/>
               {Object.keys(METRICS_COLORS).map(k => (
-                <Bar key={k} dataKey={k} fill={METRICS_COLORS[k]} radius={[4,4,0,0]}/>
+                <Bar isAnimationActive={ANIM} key={k} dataKey={k} fill={METRICS_COLORS[k]} radius={[4,4,0,0]}/>
               ))}
             </BarChart>
           </ResponsiveContainer>

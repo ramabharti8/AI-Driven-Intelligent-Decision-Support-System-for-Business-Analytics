@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { analyticsAPI } from '../services/api'
 import toast from 'react-hot-toast'
+import { ANIM } from '../motion'
 import { ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { TrendingUp, RefreshCw, FlaskConical } from 'lucide-react'
 import { gbp, tooltipStyle } from './Dashboard'
@@ -76,9 +77,9 @@ export default function PredictionsPage() {
             <YAxis tick={axisTick} axisLine={false} tickFormatter={gbp} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [Array.isArray(v) ? `${gbp(v[0])} – ${gbp(v[1])}` : gbp(v), n]} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Area dataKey="Range" stroke="none" fill="#8b5cf6" fillOpacity={0.15} name="80% interval" />
-            <Line dataKey="Actual" stroke="#6366f1" strokeWidth={2} dot={false} />
-            <Line dataKey="Forecast" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3" dot={false} />
+            <Area isAnimationActive={ANIM} dataKey="Range" stroke="none" fill="#8b5cf6" fillOpacity={0.15} name="80% interval" />
+            <Line isAnimationActive={ANIM} dataKey="Actual" stroke="#6366f1" strokeWidth={2} dot={false} />
+            <Line isAnimationActive={ANIM} dataKey="Forecast" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3" dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -94,8 +95,8 @@ export default function PredictionsPage() {
               <YAxis tick={axisTick} axisLine={false} tickFormatter={gbp} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [gbp(v), n]} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line dataKey="Actual" stroke="#6366f1" strokeWidth={2} />
-              <Line dataKey="Predicted" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3" />
+              <Line isAnimationActive={ANIM} dataKey="Actual" stroke="#6366f1" strokeWidth={2} />
+              <Line isAnimationActive={ANIM} dataKey="Predicted" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3" />
             </ComposedChart>
           </ResponsiveContainer>
         </div>

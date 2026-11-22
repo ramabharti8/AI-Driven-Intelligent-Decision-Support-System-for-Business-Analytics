@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { analyticsAPI } from '../services/api'
 import KPICard from '../components/ui/KPICard'
 import toast from 'react-hot-toast'
+import { ANIM } from '../motion'
 import {
   BarChart, Bar, Line, ComposedChart, Area,
   PieChart, Pie, Cell,
@@ -128,8 +129,8 @@ export default function Dashboard() {
               <YAxis yAxisId="r" orientation="right" tick={axisTick} axisLine={false} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [n === 'Revenue' ? gbp(v) : v.toLocaleString(), n]} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar yAxisId="l" dataKey="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              <Line yAxisId="r" dataKey="Orders" stroke="#f59e0b" strokeWidth={2} dot={false} />
+              <Bar isAnimationActive={ANIM} yAxisId="l" dataKey="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              <Line isAnimationActive={ANIM} yAxisId="r" dataKey="Orders" stroke="#f59e0b" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -144,8 +145,8 @@ export default function Dashboard() {
               <YAxis tick={axisTick} axisLine={false} />
               <Tooltip contentStyle={tooltipStyle} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="Returning" stackId="c" fill="#6366f1" />
-              <Bar dataKey="New" stackId="c" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar isAnimationActive={ANIM} dataKey="Returning" stackId="c" fill="#6366f1" />
+              <Bar isAnimationActive={ANIM} dataKey="New" stackId="c" fill="#10b981" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -157,7 +158,7 @@ export default function Dashboard() {
           <p className="chart-subtitle">{countries.top} = {countries.share_top}% of revenue: high market concentration</p>
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
-              <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={95} paddingAngle={2} dataKey="value">
+              <Pie isAnimationActive={ANIM} data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={95} paddingAngle={2} dataKey="value">
                 {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
               <Tooltip contentStyle={tooltipStyle} formatter={(v) => [gbp(v), 'Revenue']} />
@@ -175,7 +176,7 @@ export default function Dashboard() {
               <XAxis type="number" tick={axisTick} axisLine={false} tickFormatter={gbp} />
               <YAxis type="category" dataKey="name" tick={{ ...axisTick, fontSize: 10 }} width={170} axisLine={false} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v) => [gbp(v), 'Revenue']} />
-              <Bar dataKey="Revenue" fill="#06b6d4" radius={[0, 4, 4, 0]} />
+              <Bar isAnimationActive={ANIM} dataKey="Revenue" fill="#06b6d4" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -199,9 +200,9 @@ export default function Dashboard() {
             <YAxis tick={axisTick} axisLine={false} tickFormatter={gbp} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [Array.isArray(v) ? `${gbp(v[0])} – ${gbp(v[1])}` : gbp(v), n]} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Area dataKey="Range" stroke="none" fill="#8b5cf6" fillOpacity={0.15} name="80% interval" />
-            <Line dataKey="Actual" stroke="#6366f1" strokeWidth={2} dot={false} />
-            <Line dataKey="Forecast" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3" dot={false} />
+            <Area isAnimationActive={ANIM} dataKey="Range" stroke="none" fill="#8b5cf6" fillOpacity={0.15} name="80% interval" />
+            <Line isAnimationActive={ANIM} dataKey="Actual" stroke="#6366f1" strokeWidth={2} dot={false} />
+            <Line isAnimationActive={ANIM} dataKey="Forecast" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3" dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>{forecast.note}</p>

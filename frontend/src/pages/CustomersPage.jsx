@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { decisionsAPI } from '../services/api'
 import toast from 'react-hot-toast'
+import { ANIM } from '../motion'
 import {
   PieChart, Pie, Cell, BarChart, Bar, ScatterChart, Scatter, LineChart, Line,
   XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine
@@ -74,7 +75,7 @@ export default function CustomersPage() {
         <div className="grid-2" style={{ marginBottom: 16 }}>
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
-              <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={55} outerRadius={95} paddingAngle={2}>
+              <Pie isAnimationActive={ANIM} data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={55} outerRadius={95} paddingAngle={2}>
                 {pieData.map(p => <Cell key={p.name} fill={color(p.name)} />)}
               </Pie>
               <Tooltip contentStyle={tooltipStyle} formatter={(v) => [gbp(v), 'Lifetime revenue']} />
@@ -88,7 +89,7 @@ export default function CustomersPage() {
               <YAxis type="number" dataKey="y" name="Spend" scale="log" domain={['auto', 'auto']} tick={axisTick} axisLine={false} tickFormatter={gbp} />
               <ZAxis type="number" dataKey="z" range={[15, 120]} name="Orders" />
               <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [n === 'Spend' ? gbp(v) : v, n]} />
-              {Object.entries(bySeg).map(([s, pts]) => <Scatter key={s} name={s} data={pts} fill={color(s)} fillOpacity={0.6} />)}
+              {Object.entries(bySeg).map(([s, pts]) => <Scatter isAnimationActive={ANIM} key={s} name={s} data={pts} fill={color(s)} fillOpacity={0.6} />)}
             </ScatterChart>
           </ResponsiveContainer>
         </div>
@@ -160,7 +161,7 @@ export default function CustomersPage() {
                 <XAxis type="number" tick={axisTick} axisLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ ...axisTick, fontSize: 10 }} width={160} axisLine={false} />
                 <Tooltip contentStyle={tooltipStyle} />
-                <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} name="Importance" />
+                <Bar isAnimationActive={ANIM} dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} name="Importance" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -218,9 +219,9 @@ export default function CustomersPage() {
                 <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [gbp(v), n]} labelFormatter={(l) => `${l} customers`} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <ReferenceLine x={plan.recommended_n} stroke="#10b981" strokeDasharray="4 3" />
-                <Line dataKey="saved" name="Revenue protected" stroke="#6366f1" strokeWidth={2} dot={false} />
-                <Line dataKey="cost" name="Cost" stroke="#ef4444" strokeWidth={2} dot={false} />
-                <Line dataKey="net" name="Net gain" stroke="#10b981" strokeWidth={2.5} dot={false} />
+                <Line isAnimationActive={ANIM} dataKey="saved" name="Revenue protected" stroke="#6366f1" strokeWidth={2} dot={false} />
+                <Line isAnimationActive={ANIM} dataKey="cost" name="Cost" stroke="#ef4444" strokeWidth={2} dot={false} />
+                <Line isAnimationActive={ANIM} dataKey="net" name="Net gain" stroke="#10b981" strokeWidth={2.5} dot={false} />
               </LineChart>
             </ResponsiveContainer>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>{plan.assumptions}</p>

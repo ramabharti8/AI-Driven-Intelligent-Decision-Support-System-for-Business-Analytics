@@ -2,10 +2,12 @@
 
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { REDUCED_MOTION } from '../../motion'
 
 function useCountUp(target, duration = 1200) {
-  const [value, setValue] = useState(0)
+  const [value, setValue] = useState(REDUCED_MOTION ? target : 0)
   useEffect(() => {
+    if (REDUCED_MOTION) { setValue(target); return }
     let start = 0
     const step = target / (duration / 16)
     const timer = setInterval(() => {
@@ -26,7 +28,7 @@ export default function KPICard({ title, value, change, prefix = '', suffix = ''
   const shown      = animated === numericVal ? numericVal : animated
 
   const displayVal = typeof value === 'number'
-    ? `${prefix}${shown.toLocaleString(undefined, { minimumFractionDigits: animated === numericVal ? decimals : 0, maximumFractionDigits: decimals })}${suffix}`
+    ? `${prefix}${shown.toLocaleString('en-GB', { minimumFractionDigits: animated === numericVal ? decimals : 0, maximumFractionDigits: decimals })}${suffix}`
     : value
 
   return (
